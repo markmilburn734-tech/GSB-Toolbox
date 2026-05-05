@@ -17,6 +17,8 @@ import {
     GOOGLE_SHEETS_CSV_URL 
 } from './constants';
 
+import { fetchPortfolioData } from './api';
+
 export default function App() {
     // 1. Core State Management
     const [activeTab, setActiveTab] = useState('rebalancer');
@@ -27,8 +29,7 @@ export default function App() {
     
     const symbol = CURRENCY_SYMBOLS[activeCurrency] || '$';
 
-    // 2. Data Fetching Logic (Pulse Data Integration)[cite: 1, 2]
-    import { fetchPortfolioData } from './api';
+
 
 // Inside App component:
 useEffect(() => {
