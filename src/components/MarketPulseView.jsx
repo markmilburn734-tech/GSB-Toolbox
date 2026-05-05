@@ -1,4 +1,5 @@
  import React, { useState, useEffect } from 'react';
+ import { GSB } from './Icons';
  
  export default function MarketPulseView({ data, symbol, currency }) {
     const [selectedTicker, setSelectedTicker] = React.useState(null);

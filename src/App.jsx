@@ -8,6 +8,7 @@ import PerformanceAnalyticsView from './components/PerformanceAnalyticsView';
 import TaxCalculatorView from './components/TaxCalculatorView';
 import { TabButton } from './components/TabButton'; // If you move the helper button
 import { GSB, RefreshCw, TrendingUp, PieChart, PoundSign, Check } from './components/Icons';
+import { GSB } from './components/Icons';
 
 // Constants Import
 import { 

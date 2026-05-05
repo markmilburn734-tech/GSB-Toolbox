@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { BookOpen, Plus, DollarSign, TrendingUp, AlertCircle, Trash2, ChevronRight, ArrowLeft, Check, X } from './Icons';
 import { EXCHANGE_RATES, BAKED_PRICES } from '../constants';
+import { GSB } from './Icons';
 
 
 export default function RebalancerView({ presets, symbol, currency, setActiveCurrency, pricesData}) {
