@@ -6,7 +6,7 @@ export default function TaxCalculatorView({ symbol }) {
     const [assets, setAssets] = React.useState([
         { id: 1, name: "Asset A", units: 900, ogPrice: 78, currentPrice: 100 },
         { id: 2, name: "Asset B", units: 100, ogPrice: 65, currentPrice: 89 },
-        { id: 3, name: "Asset C", units: 35, ogPrice: 90, currentPrice: 112 }
+        { id: 3, name: "Asset C", units: 35, ogPrice: 90, currentPrice: 113 }
     ]);
 
     // 2. UK Tax Constants (Fixed)
