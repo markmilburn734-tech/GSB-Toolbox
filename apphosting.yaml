@@ -1,0 +1,4 @@
+kind: "v1beta1"
+runConfig:
+  cpu: 1
+  memoryMiB: 512
