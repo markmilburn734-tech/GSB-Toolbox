@@ -6,9 +6,10 @@ import {
   YAxis, 
   CartesianGrid, 
   Tooltip, 
-  ResponsiveContainer
+  ResponsiveContainer,
+  ReferenceArea
 } from 'recharts';
-import { TrendingUp, Plus, X } from 'lucide-react';
+import { TrendingUp, Plus, X, MousePointer2 } from 'lucide-react';
 
 const COLORS = ['#f43f5e', '#3b82f6', '#f59e0b', '#10b981']; // Rose, Blue, Amber, Emerald
 
@@ -34,6 +35,12 @@ export default function PerformanceAnalyticsView({ presets, historicalData, pric
   const [selections, setSelections] = useState([
     { id: Date.now(), type: 'preset', strategy: '', currency: '', profile: '', assetIsin: '' }
   ]);
+
+  // --- Drag & Highlight State ---
+  const [refAreaLeft, setRefAreaLeft] = useState(null);
+  const [refAreaRight, setRefAreaRight] = useState(null);
+  const [isSelecting, setIsSelecting] = useState(false);
+  const [customStats, setCustomStats] = useState(null);
 
   // --- Handlers ---
   const addSelection = () => {
@@ -63,7 +70,6 @@ export default function PerformanceAnalyticsView({ presets, historicalData, pric
   const calculateSeries = (sel, timeframeConfig) => {
     let portfolio = [];
     
-    // Build the portfolio composition based on selection type
     if (sel.type === 'preset') {
         if (!sel.strategy || !sel.currency || !sel.profile || !presets[sel.strategy]?.[sel.currency]?.[sel.profile]) return null;
         portfolio = presets[sel.strategy][sel.currency][sel.profile];
@@ -74,21 +80,17 @@ export default function PerformanceAnalyticsView({ presets, historicalData, pric
 
     const { source, points } = timeframeConfig;
     
-    // We map each asset's history string to an array of numbers
     const parsedHistories = portfolio.map(asset => {
         const hString = historicalData[asset.isin]?.[source];
         if (!hString || hString === "N/A") return [];
         return hString.split(';').map(v => parseFloat(v) || 0);
     });
 
-    // Ensure we have some data to work with
     if (parsedHistories.every(h => h.length === 0)) return null;
 
-    // Build the aligned series backwards (from today) so different length histories match up
-    const alignedGrowth = new Array(points).fill(null);
-    
-    // Calculate initial base for percentage math
+    const alignedData = new Array(points).fill(null);
     let initialTotal = 0;
+    
     portfolio.forEach((asset, i) => {
         const history = parsedHistories[i];
         if (!history || history.length === 0) return;
@@ -98,7 +100,6 @@ export default function PerformanceAnalyticsView({ presets, historicalData, pric
 
     if (initialTotal === 0) return null;
 
-    // Fill the data points
     for (let p = 0; p < points; p++) {
         let currentTotal = 0;
         let hasData = false;
@@ -106,8 +107,6 @@ export default function PerformanceAnalyticsView({ presets, historicalData, pric
         portfolio.forEach((asset, i) => {
             const history = parsedHistories[i];
             if (!history || history.length === 0) return;
-            
-            // Align to the end of the arrays
             const historyIndex = history.length - points + p;
             
             if (historyIndex >= 0 && historyIndex < history.length) {
@@ -118,18 +117,24 @@ export default function PerformanceAnalyticsView({ presets, historicalData, pric
 
         if (hasData) {
             const pctGrowth = ((currentTotal - initialTotal) / initialTotal) * 100;
-            alignedGrowth[p] = parseFloat(pctGrowth.toFixed(2));
+            // Store BOTH growth (for chart Y axis) and raw total (for custom area math)
+            alignedData[p] = {
+                growth: parseFloat(pctGrowth.toFixed(2)),
+                raw: currentTotal
+            };
         }
     }
 
-    return alignedGrowth;
+    return alignedData;
   };
 
   const chartData = useMemo(() => {
+    // Reset custom selection if timeframe changes
+    setRefAreaLeft(null); setRefAreaRight(null); setCustomStats(null);
+
     const config = TIMEFRAMES[timeframe];
     const seriesResults = selections.map(sel => calculateSeries(sel, config));
     
-    // Generate uniform labels
     const labels = [];
     const now = new Date();
     const isWeekly = config.source.includes('Weekly');
@@ -144,20 +149,85 @@ export default function PerformanceAnalyticsView({ presets, historicalData, pric
         labels.push(d.toLocaleString('default', { month: 'short', year: '2-digit' }));
     }
 
-    // Merge into Recharts format
     const data = [];
     for (let i = 0; i < config.points; i++) {
         const point = { name: labels[i] };
         selections.forEach((sel, idx) => {
-            const val = seriesResults[idx] ? seriesResults[idx][i] : null;
-            point[`series_${idx}`] = val;
+            const dataPoint = seriesResults[idx] ? seriesResults[idx][i] : null;
+            point[`series_${idx}`] = dataPoint ? dataPoint.growth : null;
+            point[`raw_${idx}`] = dataPoint ? dataPoint.raw : null;
         });
         data.push(point);
     }
     return data;
   }, [selections, timeframe, presets, historicalData]);
 
-  // Generate End-of-Period Stats
+  // --- Chart Drag Handlers ---
+  const handleMouseDown = (e) => {
+    if (e?.activeLabel) {
+      setRefAreaLeft(e.activeLabel);
+      setRefAreaRight(e.activeLabel);
+      setIsSelecting(true);
+      setCustomStats(null);
+    }
+  };
+
+  const handleMouseMove = (e) => {
+    if (isSelecting && e?.activeLabel) {
+      setRefAreaRight(e.activeLabel);
+    }
+  };
+
+  const handleMouseUp = () => {
+    setIsSelecting(false);
+    
+    if (refAreaLeft && refAreaRight && refAreaLeft !== refAreaRight) {
+      // Find indices to ensure chronological order
+      let startIndex = chartData.findIndex(d => d.name === refAreaLeft);
+      let endIndex = chartData.findIndex(d => d.name === refAreaRight);
+      
+      if (startIndex > endIndex) {
+        [startIndex, endIndex] = [endIndex, startIndex];
+        setRefAreaLeft(chartData[startIndex].name);
+        setRefAreaRight(chartData[endIndex].name);
+      }
+
+      // Calculate point-to-point math for the isolated timeframe
+      const stats = selections.map((sel, idx) => {
+        const startRaw = chartData[startIndex]?.[`raw_${idx}`];
+        const endRaw = chartData[endIndex]?.[`raw_${idx}`];
+        
+        if (startRaw && endRaw) {
+           const percentChange = ((endRaw - startRaw) / startRaw) * 100;
+           return {
+              id: sel.id,
+              name: sel.type === 'preset' ? (sel.profile || 'Preset') : (Object.values(pricesData[sel.currency] || {}).find(a => a.isin === sel.assetIsin)?.name || 'Asset'),
+              return: percentChange
+           };
+        }
+        return null;
+      }).filter(Boolean);
+
+      setCustomStats({ 
+          start: chartData[startIndex].name, 
+          end: chartData[endIndex].name, 
+          stats 
+      });
+    } else {
+      // Clicked without dragging (clear selection)
+      setRefAreaLeft(null);
+      setRefAreaRight(null);
+      setCustomStats(null);
+    }
+  };
+
+  const clearSelection = () => {
+      setRefAreaLeft(null);
+      setRefAreaRight(null);
+      setCustomStats(null);
+  };
+
+  // Generate Default End-of-Period Stats
   const finalStats = useMemo(() => {
     if (chartData.length === 0) return [];
     const lastData = chartData[chartData.length - 1];
@@ -168,6 +238,9 @@ export default function PerformanceAnalyticsView({ presets, historicalData, pric
     }));
   }, [chartData, selections, pricesData]);
 
+  // Determine which stats to show (Custom window OR entire timeframe)
+  const displayStats = customStats ? customStats.stats : finalStats;
+
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6 animate-in fade-in">
       {/* Header & Controls Panel */}
@@ -175,7 +248,10 @@ export default function PerformanceAnalyticsView({ presets, historicalData, pric
         <div className="flex flex-col md:flex-row justify-between items-start gap-4">
           <div>
             <h3 className="text-3xl font-bold text-slate-800 tracking-tight">Performance Analytics</h3>
-            <p className="text-slate-500 font-medium">Compare growth across portfolios and individual assets.</p>
+            <p className="text-slate-500 font-medium flex items-center gap-2">
+                Compare growth across portfolios. <span className="hidden md:inline text-slate-300">•</span>
+                <span className="text-brand3 font-bold flex items-center gap-1"><MousePointer2 size={14}/> Drag on chart to isolate timeframes.</span>
+            </p>
           </div>
           <button 
             onClick={addSelection}
@@ -203,7 +279,6 @@ export default function PerformanceAnalyticsView({ presets, historicalData, pric
               </div>
 
               <div className="space-y-3">
-                  {/* Type & Currency Row */}
                   <div className="flex gap-2">
                       <select
                           className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 outline-none focus:border-brand/30 transition-colors"
@@ -227,7 +302,6 @@ export default function PerformanceAnalyticsView({ presets, historicalData, pric
                       </select>
                   </div>
 
-                  {/* Dynamic Target Selection */}
                   {sel.type === 'preset' ? (
                       <div className="flex gap-2">
                           <select
@@ -277,7 +351,10 @@ export default function PerformanceAnalyticsView({ presets, historicalData, pric
           {Object.entries(TIMEFRAMES).map(([key, opt]) => (
             <button
               key={key}
-              onClick={() => setTimeframe(key)}
+              onClick={() => {
+                  setTimeframe(key);
+                  clearSelection(); // Clear drag selection when timeframe changes
+              }}
               className={`px-5 py-2 text-xs font-black rounded-xl transition-all ${
                 timeframe === key
                   ? 'bg-brand text-white shadow-md'
@@ -291,14 +368,25 @@ export default function PerformanceAnalyticsView({ presets, historicalData, pric
       </div>
 
       {/* Chart Canvas */}
-      <div className="bg-white p-6 md:p-10 rounded-[2.5rem] border border-slate-200 shadow-sm relative">
+      <div className="bg-white p-6 md:p-10 rounded-[2.5rem] border border-slate-200 shadow-sm relative transition-all">
         {chartData.length > 0 ? (
           <div className="space-y-8">
             {/* Stat Row */}
-            <div className="flex flex-wrap gap-8 border-b border-slate-100 pb-6">
-               {finalStats.map((stat, idx) => stat.return !== undefined && stat.return !== null && (
-                 <div key={stat.id} className={`flex-1 min-w-[120px] ${idx > 0 ? 'md:border-l border-slate-100 md:pl-8' : ''}`}>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1.5 truncate">
+            <div className={`flex flex-wrap items-center gap-8 border-b pb-6 transition-all ${customStats ? 'border-brand/20 bg-brand/5 -mx-6 md:-mx-10 px-6 md:px-10 -mt-6 pt-6 rounded-t-[2.5rem]' : 'border-slate-100'}`}>
+               <div className="w-full flex justify-between items-center mb-2 md:mb-0">
+                   <p className={`text-xs font-black uppercase tracking-widest ${customStats ? 'text-brand' : 'text-slate-400'}`}>
+                      {customStats ? `Custom Return: ${customStats.start} → ${customStats.end}` : `Total Return (${TIMEFRAMES[timeframe].label})`}
+                   </p>
+                   {customStats && (
+                       <button onClick={clearSelection} className="text-xs font-bold text-brand3 hover:text-rose-700 bg-brand3/10 px-3 py-1 rounded-lg transition-colors">
+                           ✕ Clear Selection
+                       </button>
+                   )}
+               </div>
+
+               {displayStats.map((stat, idx) => stat.return !== undefined && stat.return !== null && (
+                 <div key={stat.id} className={`flex-1 min-w-[120px] ${idx > 0 ? 'md:border-l border-slate-200/50 md:pl-8' : ''}`}>
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 flex items-center gap-1.5 truncate">
                         <span className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[idx] }}></span>
                         {stat.name}
                     </p>
@@ -309,9 +397,16 @@ export default function PerformanceAnalyticsView({ presets, historicalData, pric
                ))}
             </div>
 
-            <div className="h-[450px] w-full">
+            <div className="h-[450px] w-full select-none cursor-crosshair">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData} margin={{ top: 20, right: 10, left: 0, bottom: 0 }}>
+                <AreaChart 
+                    data={chartData} 
+                    margin={{ top: 20, right: 10, left: 0, bottom: 0 }}
+                    onMouseDown={handleMouseDown}
+                    onMouseMove={handleMouseMove}
+                    onMouseUp={handleMouseUp}
+                    onMouseLeave={handleMouseUp} // Prevent getting stuck if mouse leaves chart bounds
+                >
                   <defs>
                     {selections.map((sel, idx) => (
                         <linearGradient key={`grad_${idx}`} id={`color_${idx}`} x1="0" y1="0" x2="0" y2="1">
@@ -322,7 +417,6 @@ export default function PerformanceAnalyticsView({ presets, historicalData, pric
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   
-                  {/* Dynamic XAxis Label Truncation based on timeframe */}
                   <XAxis 
                     dataKey="name" 
                     axisLine={false}
@@ -339,10 +433,12 @@ export default function PerformanceAnalyticsView({ presets, historicalData, pric
                     width={50}
                   />
                   <Tooltip 
+                    cursor={{ stroke: '#cbd5e1', strokeWidth: 1, strokeDasharray: '4 4' }}
                     content={({ active, payload }) => {
-                      if (active && payload && payload.length) {
+                      // Don't show standard tooltip while actively dragging a selection box
+                      if (active && payload && payload.length && !isSelecting) {
                         return (
-                          <div className="bg-slate-900 text-white p-5 rounded-2xl shadow-2xl border border-slate-800 min-w-[200px]">
+                          <div className="bg-slate-900 text-white p-5 rounded-2xl shadow-2xl border border-slate-800 min-w-[200px] pointer-events-none">
                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 border-b border-slate-800 pb-2">
                                 {payload[0].payload.name}
                             </p>
@@ -368,7 +464,6 @@ export default function PerformanceAnalyticsView({ presets, historicalData, pric
                     }}
                   />
                   
-                  {/* Render Areas */}
                   {selections.map((sel, idx) => (
                      <Area 
                         key={sel.id}
@@ -381,6 +476,17 @@ export default function PerformanceAnalyticsView({ presets, historicalData, pric
                         animationDuration={800}
                      />
                   ))}
+
+                  {/* Render the shaded selection box */}
+                  {refAreaLeft && refAreaRight && (
+                    <ReferenceArea 
+                        x1={refAreaLeft} 
+                        x2={refAreaRight} 
+                        strokeOpacity={0.3} 
+                        fill="#573960" 
+                        fillOpacity={0.1} 
+                    />
+                  )}
                 </AreaChart>
               </ResponsiveContainer>
             </div>
