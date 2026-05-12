@@ -1,21 +1,24 @@
 import React, { useState } from 'react';
 
-export default function TaxCalculatorView({ symbol }) {
+export default function TaxCalculatorView({ symbol = "£" }) {
     // 1. Inputs: Editable State
-    const [income, setIncome] = React.useState(30000);
-    const [assets, setAssets] = React.useState([
+    const [income, setIncome] = useState(30000);
+    const [allowanceUsed, setAllowanceUsed] = useState(0);
+    const [isJoint, setIsJoint] = useState(false);
+    const [assets, setAssets] = useState([
         { id: 1, name: "Asset A", units: 900, ogPrice: 78, currentPrice: 100 },
         { id: 2, name: "Asset B", units: 100, ogPrice: 65, currentPrice: 89 },
         { id: 3, name: "Asset C", units: 35, ogPrice: 90, currentPrice: 113 }
     ]);
 
-    // 2. UK Tax Constants (Fixed)
+    // 2. UK Tax Constants (Updated for 2024/25 context)
     const CONSTANTS = {
-        LR_TAX: 0.18,          // 18%
-        HR_TAX: 0.24,          // 24%
-        TX_FREE_ALLOW: 3000,   // £3,000 Allowance
+        LR_TAX: 0.18,          // 18% (e.g., for basic rate residential/other)
+        HR_TAX: 0.24,          // 24% (e.g., higher rate residential)
+        BASE_ALLOWANCE: 3000,  // Individual CGT allowance
         BASIC_RATE_LMT: 50270,
-        PERS_ALLOW: 12570 
+        PERS_ALLOW: 12570,
+        MARKET_BUFFER: 0.005   // 0.5% Buffer
     };
 
     // 3. Update Logic
@@ -25,92 +28,119 @@ export default function TaxCalculatorView({ symbol }) {
         ));
     };
 
-    /// 4. Calculation Engine (Matching Spreadsheet Logic)
-const calculateResults = () => {
-    // A. Calculate individual gains: (Current Price - OG Price) * Units
-    const breakdown = assets.map(a => {
-        const priceChange = a.currentPrice - a.ogPrice;
-        const totalGain = priceChange * a.units;
-        return { ...a, totalGain, priceChange };
-    });
+    /// 4. Calculation Engine
+    const calculateResults = () => {
+        // A. Apply 0.5% buffer to sell price (overestimating gain/market movement)
+        const breakdown = assets.map(a => {
+            const bufferedSellPrice = a.currentPrice * (1 + CONSTANTS.MARKET_BUFFER);
+            const priceChange = bufferedSellPrice - a.ogPrice;
+            const totalGain = priceChange * a.units;
+            return { ...a, totalGain, priceChange, bufferedSellPrice };
+        });
 
-    // B. Calculate Total and "Net Tax Free" (Taxable Gain)
-    const totalGain = breakdown.reduce((sum, a) => sum + a.totalGain, 0);
-    const taxableGain = Math.max(0, totalGain - CONSTANTS.TX_FREE_ALLOW);
+        // B. Dynamic Allowance: Double if joint, then subtract what's already used
+        const availableAllowance = isJoint ? (CONSTANTS.BASE_ALLOWANCE * 2) : CONSTANTS.BASE_ALLOWANCE;
+        const remainingAllowance = Math.max(0, availableAllowance - allowanceUsed);
 
-    // C. Calculate "Income Diff" (Unused Basic Rate Band)
-    // Logic: Basic Rate Limit - (Rough Income - Personal Allowance)
-    const taxableIncome = Math.max(0, income - CONSTANTS.PERS_ALLOW);
-    const unusedBasicBand = Math.max(0, CONSTANTS.BASIC_RATE_LMT - taxableIncome);
+        const totalGain = breakdown.reduce((sum, a) => sum + a.totalGain, 0);
+        const taxableGain = Math.max(0, totalGain - remainingAllowance);
 
-    // D. Split Gains across Tax Bands
-    // The amount of gain that falls into the 18% band is limited by the "Income Diff"
-    const gainsAtLR = Math.min(taxableGain, unusedBasicBand);
-    const gainsAtHR = Math.max(0, taxableGain - gainsAtLR);
+        // C. Calculate Unused Basic Rate Band
+        const taxableIncome = Math.max(0, income - CONSTANTS.PERS_ALLOW);
+        const unusedBasicBand = Math.max(0, CONSTANTS.BASIC_RATE_LMT - taxableIncome);
 
-    // E. Final Tax Calculation
-    const taxOwed = (gainsAtLR * CONSTANTS.LR_TAX) + (gainsAtHR * CONSTANTS.HR_TAX);
-    // Avg Tax Calc
-    const avgtax = taxableGain > 0 ? (taxOwed / taxableGain) * 100 : 0;
+        // D. Split Gains across Tax Bands
+        const gainsAtLR = Math.min(taxableGain, unusedBasicBand);
+        const gainsAtHR = Math.max(0, taxableGain - gainsAtLR);
 
-    return { 
-        breakdown, 
-        totalGain, 
-        taxableAmount: taxableGain, 
-        taxOwed,
-        incomeDiff: unusedBasicBand,
-        gainsAtLR,
-        gainsAtHR,
-        avgtax
+        // E. Final Tax Calculation
+        const taxOwed = (gainsAtLR * CONSTANTS.LR_TAX) + (gainsAtHR * CONSTANTS.HR_TAX);
+        const avgtax = taxableGain > 0 ? (taxOwed / taxableGain) * 100 : 0;
+
+        return { 
+            breakdown, 
+            totalGain, 
+            taxableAmount: taxableGain, 
+            taxOwed,
+            remainingAllowance,
+            gainsAtLR,
+            gainsAtHR,
+            avgtax
+        };
     };
-};
+
     const res = calculateResults();
 
     return (
-        <div className="p-8 max-w-5xl mx-auto">
-            {/* Header & Income Input */}
-            <div className="flex justify-between items-end mb-8 border-b border-gray-200 pb-6">
-                <div>
-                    <h2 className="text-2xl font-bold text-gray-900">CGT Calculator</h2>
-                    <p className="text-gray-500">Calculate liability based on UK tax bands</p>
-                </div>
-                <div className="w-64">
-                    <label className="block text-xs font-bold text-brand uppercase mb-1">Annual Income ({symbol})</label>
+        <div className="p-8 max-w-5xl mx-auto bg-gray-50 min-h-screen">
+            {/* Header */}
+            <div className="mb-8 border-b pb-6">
+                <h2 className="text-2xl font-bold text-gray-900">CGT Calculator (Buffered)</h2>
+                <p className="text-gray-500 text-sm">Includes 0.5% market volatility buffer and marital allowance toggles.</p>
+            </div>
+
+            {/* Controls Section */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div className="bg-white p-4 rounded-xl border shadow-sm">
+                    <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Annual Income</label>
                     <input 
                         type="number" 
                         value={income} 
                         onChange={(e) => setIncome(e.target.value)}
-                        className="w-full p-2 border rounded font-mono text-lg focus:ring-2 focus:ring-brand outline-none"
+                        className="w-full p-2 border rounded font-mono text-lg"
                     />
+                </div>
+
+                <div className="bg-white p-4 rounded-xl border shadow-sm">
+                    <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Allowance Already Used</label>
+                    <input 
+                        type="number" 
+                        value={allowanceUsed} 
+                        onChange={(e) => setAllowanceUsed(e.target.value)}
+                        className="w-full p-2 border rounded font-mono text-lg"
+                    />
+                </div>
+
+                <div className="bg-white p-4 rounded-xl border shadow-sm flex flex-col justify-center">
+                    <label className="flex items-center cursor-pointer space-x-3">
+                        <input 
+                            type="checkbox" 
+                            checked={isJoint} 
+                            onChange={(e) => setIsJoint(e.target.checked)}
+                            className="w-5 h-5 accent-blue-600"
+                        />
+                        <span className="text-sm font-bold text-gray-700">Joint Filing / Married (Double Allowance)</span>
+                    </label>
+                    <p className="text-[10px] text-gray-400 mt-1 uppercase">Current Allowance: {symbol}{res.remainingAllowance}</p>
                 </div>
             </div>
 
-            {/* Top Cards */}
+            {/* Results Cards */}
             <div className="grid grid-cols-3 gap-6 mb-8">
                 <div className="bg-white p-4 rounded-xl border shadow-sm">
-                    <span className="text-gray-500 text-sm">Total Gain</span>
-                    <div className="text-2xl font-bold text-gray-900">£{res.totalGain.toLocaleString()}</div>
+                    <span className="text-gray-500 text-sm">Total Gain (+0.5% Buffer)</span>
+                    <div className="text-2xl font-bold text-gray-900">{symbol}{res.totalGain.toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
                 </div>
                 <div className="bg-white p-4 rounded-xl border shadow-sm">
                     <span className="text-gray-500 text-sm">Taxable Amount</span>
-                    <div className="text-2xl font-bold text-gray-900">£{res.taxableAmount.toLocaleString()}</div>
+                    <div className="text-2xl font-bold text-gray-900">{symbol}{res.taxableAmount.toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
                 </div>
-                <div className="bg-brand p-4 rounded-xl shadow-md text-white">
+                <div className="bg-blue-600 p-4 rounded-xl shadow-md text-white">
                     <span className="opacity-80 text-sm">Est. Tax Owed ({res.avgtax.toFixed(2)}%)</span>
-                    <div className="text-2xl font-bold">£{res.taxOwed.toLocaleString()}</div>
+                    <div className="text-2xl font-bold">{symbol}{res.taxOwed.toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
                 </div>
             </div>
 
-            {/* Asset Inputs Table */}
+            {/* Asset Table */}
             <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
                 <table className="w-full text-left">
-                    <thead className="bg-gray-50 text-xs uppercase font-bold text-gray-600">
+                    <thead className="bg-gray-50 text-xs uppercase font-bold text-gray-600 border-b">
                         <tr>
                             <th className="p-4">Asset Name</th>
                             <th className="p-4">Units</th>
-                            <th className="p-4">Buy Price {symbol}</th>
-                            <th className="p-4">Sell Price {symbol}</th>
-                            <th className="p-4 text-right">Gain</th>
+                            <th className="p-4">Buy Price</th>
+                            <th className="p-4">Sell Price (Raw)</th>
+                            <th className="p-4 text-right">Gain (Buffered)</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y">
@@ -118,16 +148,16 @@ const calculateResults = () => {
                             <tr key={asset.id} className="hover:bg-gray-50 transition-colors">
                                 <td className="p-4 font-medium">{asset.name}</td>
                                 <td className="p-4">
-                                    <input type="number" value={asset.units} onChange={(e) => updateAsset(asset.id, 'units', e.target.value)} className="w-24 p-1 border rounded" />
+                                    <input type="number" value={asset.units} onChange={(e) => updateAsset(asset.id, 'units', e.target.value)} className="w-20 p-1 border rounded" />
                                 </td>
                                 <td className="p-4">
-                                    <input type="number" value={asset.ogPrice} onChange={(e) => updateAsset(asset.id, 'ogPrice', e.target.value)} className="w-24 p-1 border rounded" />
+                                    <input type="number" value={asset.ogPrice} onChange={(e) => updateAsset(asset.id, 'ogPrice', e.target.value)} className="w-20 p-1 border rounded" />
                                 </td>
                                 <td className="p-4">
-                                    <input type="number" value={asset.currentPrice} onChange={(e) => updateAsset(asset.id, 'currentPrice', e.target.value)} className="w-24 p-1 border rounded" />
+                                    <input type="number" value={asset.currentPrice} onChange={(e) => updateAsset(asset.id, 'currentPrice', e.target.value)} className="w-20 p-1 border rounded" />
                                 </td>
                                 <td className={`p-4 text-right font-bold ${asset.totalGain >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                    £{asset.totalGain.toLocaleString()}
+                                    {symbol}{asset.totalGain.toLocaleString(undefined, {maximumFractionDigits: 0})}
                                 </td>
                             </tr>
                         ))}
@@ -136,5 +166,4 @@ const calculateResults = () => {
             </div>
         </div>
     );
-};
-
+}
