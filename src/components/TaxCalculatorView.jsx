@@ -1,60 +1,53 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
+import { Plus, Trash2, TrendingUp, DollarSign, GSB } from './Icons'; // Assuming these are standard across your app
 
-export default function TaxCalculatorView({ symbol = "£" }) {
-    // 1. Inputs: Editable State
+export default function TaxCalculatorView({ symbol = "£", currency = "GBP", pricesData = {} }) {
+    // --- State Management ---
     const [income, setIncome] = useState(30000);
     const [allowanceUsed, setAllowanceUsed] = useState(0);
     const [isJoint, setIsJoint] = useState(false);
-    const [assets, setAssets] = useState([
-        { id: 1, name: "Asset A", units: 900, ogPrice: 78, currentPrice: 100 },
-        { id: 2, name: "Asset B", units: 100, ogPrice: 65, currentPrice: 89 },
-        { id: 3, name: "Asset C", units: 35, ogPrice: 90, currentPrice: 113 }
-    ]);
+    const [addMenuOpen, setAddMenuOpen] = useState(false);
 
-    // 2. UK Tax Constants (Updated for 2024/25 context)
-    const CONSTANTS = {
-        LR_TAX: 0.18,          // 18% (e.g., for basic rate residential/other)
-        HR_TAX: 0.24,          // 24% (e.g., higher rate residential)
-        BASE_ALLOWANCE: 3000,  // Individual CGT allowance
+    const TAX_CONSTANTS = {
+        LR_TAX: 0.18,
+        HR_TAX: 0.24,
+        BASE_ALLOWANCE: 3000,
         BASIC_RATE_LMT: 50270,
         PERS_ALLOW: 12570,
-        MARKET_BUFFER: 0.005   // 0.5% Buffer
+        MARKET_BUFFER: 0.005 
     };
+    
+    // Initial Asset State
+    const [assets, setAssets] = useState([]);
 
-    // 3. Update Logic
-    const updateAsset = (id, field, value) => {
-        setAssets(prev => prev.map(a => 
-            a.id === id ? { ...a, [field]: parseFloat(value) || 0 } : a
-        ));
-    };
+    // --- Derived Values ---
+    const maxAllowancePossible = isJoint ? (TAX_CONSTANTS.BASE_ALLOWANCE * 2) : TAX_CONSTANTS.BASE_ALLOWANCE;
 
-    /// 4. Calculation Engine
-    const calculateResults = () => {
-        // A. Apply 0.5% buffer to sell price (overestimating gain/market movement)
+    // --- Calculation Engine ---
+    const results = useMemo(() => {
         const breakdown = assets.map(a => {
-            const bufferedSellPrice = a.currentPrice * (1 + CONSTANTS.MARKET_BUFFER);
-            const priceChange = bufferedSellPrice - a.ogPrice;
-            const totalGain = priceChange * a.units;
-            return { ...a, totalGain, priceChange, bufferedSellPrice };
+            const bufferedSellPrice = a.currentPrice * (1 + TAX_CONSTANTS.MARKET_BUFFER);
+            const totalGain = (bufferedSellPrice - a.ogPrice) * a.units;
+            return { ...a, totalGain, bufferedSellPrice };
         });
 
-        // B. Dynamic Allowance: Double if joint, then subtract what's already used
-        const availableAllowance = isJoint ? (CONSTANTS.BASE_ALLOWANCE * 2) : CONSTANTS.BASE_ALLOWANCE;
-        const remainingAllowance = Math.max(0, availableAllowance - allowanceUsed);
+        // Joint Filing doubles Personal Allowance and Basic Rate Limits
+        const multiplier = isJoint ? 2 : 1;
+        const activePersAllow = TAX_CONSTANTS.PERS_ALLOW * multiplier;
+        const activeBasicRateLmt = TAX_CONSTANTS.BASIC_RATE_LMT * multiplier;
+        const activeBaseAllowance = TAX_CONSTANTS.BASE_ALLOWANCE * multiplier;
 
+        const remainingAllowance = Math.max(0, activeBaseAllowance - allowanceUsed);
         const totalGain = breakdown.reduce((sum, a) => sum + a.totalGain, 0);
         const taxableGain = Math.max(0, totalGain - remainingAllowance);
 
-        // C. Calculate Unused Basic Rate Band
-        const taxableIncome = Math.max(0, income - CONSTANTS.PERS_ALLOW);
-        const unusedBasicBand = Math.max(0, CONSTANTS.BASIC_RATE_LMT - taxableIncome);
+        const taxableIncome = Math.max(0, income - activePersAllow);
+        const unusedBasicBand = Math.max(0, activeBasicRateLmt - taxableIncome);
 
-        // D. Split Gains across Tax Bands
         const gainsAtLR = Math.min(taxableGain, unusedBasicBand);
         const gainsAtHR = Math.max(0, taxableGain - gainsAtLR);
 
-        // E. Final Tax Calculation
-        const taxOwed = (gainsAtLR * CONSTANTS.LR_TAX) + (gainsAtHR * CONSTANTS.HR_TAX);
+        const taxOwed = (gainsAtLR * TAX_CONSTANTS.LR_TAX) + (gainsAtHR * TAX_CONSTANTS.HR_TAX);
         const avgtax = taxableGain > 0 ? (taxOwed / taxableGain) * 100 : 0;
 
         return { 
@@ -63,106 +56,285 @@ export default function TaxCalculatorView({ symbol = "£" }) {
             taxableAmount: taxableGain, 
             taxOwed,
             remainingAllowance,
-            gainsAtLR,
-            gainsAtHR,
             avgtax
         };
+    }, [assets, income, allowanceUsed, isJoint]);
+
+    // --- Formatters ---
+    const formatCurrency = (val) => {
+        return new Intl.NumberFormat('en-GB', { 
+            style: 'currency', 
+            currency: currency, 
+            maximumFractionDigits: 0,
+            minimumFractionDigits: 0
+        }).format(val || 0);
     };
 
-    const res = calculateResults();
+    // --- Handlers ---
+    const handleUpdateAsset = (id, field, value) => {
+        setAssets(prev => prev.map(a => 
+            a.id === id ? { ...a, [field]: field === 'name' || field === 'isin' ? value : (parseFloat(value) || 0) } : a
+        ));
+    };
+
+    const addBlankRow = () => {
+        if (assets.length >= 5) return;
+        setAssets(prev => [...prev, { id: Date.now(), name: "New Asset", isin: "", units: 0, ogPrice: 0, currentPrice: 0 }]);
+        setAddMenuOpen(false);
+    };
+
+    const addExistingAsset = (asset) => {
+        if (assets.length >= 5) return;
+        setAssets(prev => [...prev, { 
+            id: Date.now(), 
+            name: asset.name, 
+            isin: asset.isin,
+            units: 0, 
+            ogPrice: asset.price, 
+            currentPrice: asset.price 
+        }]);
+        setAddMenuOpen(false);
+    };
+
+    const removeRow = (id) => setAssets(prev => prev.filter(a => a.id !== id));
 
     return (
-        <div className="p-8 max-w-5xl mx-auto bg-gray-50 min-h-screen">
-            {/* Header */}
-            <div className="mb-8 border-b pb-6">
-                <h2 className="text-2xl font-bold text-gray-900">CGT Calculator (Buffered)</h2>
-                <p className="text-gray-500 text-sm">Includes 0.5% market volatility buffer and marital allowance toggles.</p>
-            </div>
-
-            {/* Controls Section */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <div className="bg-white p-4 rounded-xl border shadow-sm">
-                    <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Annual Income</label>
-                    <input 
-                        type="number" 
-                        value={income} 
-                        onChange={(e) => setIncome(e.target.value)}
-                        className="w-full p-2 border rounded font-mono text-lg"
-                    />
+        <div className="max-w-7xl mx-auto px-4 py-8 relative animate-in fade-in">
+            {/* Header Section */}
+            <header className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div>
+                    <div className="flex items-center gap-3 mb-1">
+                        <div className="bg-brand p-2 rounded-lg">
+                            <GSB className="w-6 h-6 text-white" />
+                        </div>
+                        <h1 className="text-3xl font-bold text-gray-800 tracking-tight">CGT Estimator</h1>
+                    </div>
+                    <p className="text-gray-500 ml-1">2024/25 Logic • 0.5% Market Volatility Buffer</p>
                 </div>
-
-                <div className="bg-white p-4 rounded-xl border shadow-sm">
-                    <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Allowance Already Used</label>
-                    <input 
-                        type="number" 
-                        value={allowanceUsed} 
-                        onChange={(e) => setAllowanceUsed(e.target.value)}
-                        className="w-full p-2 border rounded font-mono text-lg"
-                    />
-                </div>
-
-                <div className="bg-white p-4 rounded-xl border shadow-sm flex flex-col justify-center">
-                    <label className="flex items-center cursor-pointer space-x-3">
-                        <input 
-                            type="checkbox" 
-                            checked={isJoint} 
-                            onChange={(e) => setIsJoint(e.target.checked)}
-                            className="w-5 h-5 accent-blue-600"
-                        />
-                        <span className="text-sm font-bold text-gray-700">Joint Filing / Married (Double Allowance)</span>
+                <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200 flex flex-col min-w-[200px]">
+                    <label className="text-xs font-bold uppercase text-gray-400 mb-1 flex items-center gap-1">
+                        <TrendingUp className="w-3 h-3" /> Estimated Tax Owed
                     </label>
-                    <p className="text-[10px] text-gray-400 mt-1 uppercase">Current Allowance: {symbol}{res.remainingAllowance}</p>
+                    <span className="text-3xl font-mono font-bold text-brand3 tracking-tight">
+                        {formatCurrency(results.taxOwed)}
+                    </span>
+                </div>
+            </header>
+
+            {/* Inputs & Controls */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                {/* Income Input */}
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Gross Annual Income</label>
+                    <div className="relative">
+                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                            <span className="font-bold text-lg">{symbol}</span>
+                        </div>
+                        <input 
+                            type="number" 
+                            value={income} 
+                            onChange={(e) => setIncome(e.target.value)}
+                            className="w-full pl-8 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl font-mono text-lg outline-none focus:border-brand/30 transition-colors"
+                        />
+                    </div>
+                </div>
+
+                {/* Allowance Slider */}
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+                    <div className="flex justify-between items-center mb-4">
+                        <label className="block text-sm font-medium text-gray-700">Allowance Used</label>
+                        <span className="font-mono font-bold text-gray-900 bg-gray-100 px-2 py-1 rounded text-sm">
+                            {formatCurrency(allowanceUsed)}
+                        </span>
+                    </div>
+                    <input 
+                        type="range"
+                        min="0"
+                        max={maxAllowancePossible}
+                        step="50"
+                        value={allowanceUsed > maxAllowancePossible ? maxAllowancePossible : allowanceUsed}
+                        onChange={(e) => setAllowanceUsed(parseInt(e.target.value))}
+                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-brand"
+                    />
+                    <div className="flex justify-between text-[10px] text-gray-400 mt-3 font-bold uppercase tracking-wider">
+                        <span>Min: 0</span>
+                        <span>Max: {formatCurrency(maxAllowancePossible)}</span>
+                    </div>
+                </div>
+
+                {/* Joint Filing Toggle */}
+                <div className="bg-brand p-6 rounded-2xl shadow-lg border border-brand2 flex flex-col justify-between">
+                    <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-white/90">Joint Filing Status</span>
+                        <button 
+                            onClick={() => {
+                                const next = !isJoint;
+                                setIsJoint(next);
+                                if(!next && allowanceUsed > 3000) setAllowanceUsed(3000);
+                            }}
+                            className={`w-12 h-6 rounded-full transition-all duration-300 relative ${isJoint ? 'bg-brand3' : 'bg-white/20'}`}
+                        >
+                            <div className={`absolute top-1 bg-white w-4 h-4 rounded-full transition-transform duration-300 shadow-sm ${isJoint ? 'left-7' : 'left-1'}`} />
+                        </button>
+                    </div>
+                    <div className="mt-4 border-t border-white/10 pt-4">
+                        <p className="text-[10px] text-white/60 uppercase font-bold tracking-widest mb-1">Net CGT Allowance</p>
+                        <p className="text-2xl font-mono font-bold text-white leading-none">
+                            {formatCurrency(results.remainingAllowance)}
+                        </p>
+                    </div>
                 </div>
             </div>
 
-            {/* Results Cards */}
-            <div className="grid grid-cols-3 gap-6 mb-8">
-                <div className="bg-white p-4 rounded-xl border shadow-sm">
-                    <span className="text-gray-500 text-sm">Total Gain (+0.5% Buffer)</span>
-                    <div className="text-2xl font-bold text-gray-900">{symbol}{res.totalGain.toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
+            {/* Middle Control Bar */}
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 flex flex-col md:flex-row items-center justify-between gap-6 mb-8">
+                <div className="flex gap-8 w-full md:w-auto">
+                    <div>
+                        <span className="block text-xs font-bold uppercase text-gray-400 mb-1">Total Buffered Gain</span>
+                        <span className="text-xl font-semibold text-gray-900">{formatCurrency(results.totalGain)}</span>
+                    </div>
+                    <div>
+                        <span className="block text-xs font-bold uppercase text-gray-400 mb-1">Taxable Portion</span>
+                        <span className="text-xl font-semibold text-gray-900">{formatCurrency(results.taxableAmount)}</span>
+                    </div>
+                    <div>
+                        <span className="block text-xs font-bold uppercase text-gray-400 mb-1">Effective Rate</span>
+                        <span className="text-xl font-semibold text-brand3">{results.avgtax.toFixed(1)}%</span>
+                    </div>
                 </div>
-                <div className="bg-white p-4 rounded-xl border shadow-sm">
-                    <span className="text-gray-500 text-sm">Taxable Amount</span>
-                    <div className="text-2xl font-bold text-gray-900">{symbol}{res.taxableAmount.toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
-                </div>
-                <div className="bg-blue-600 p-4 rounded-xl shadow-md text-white">
-                    <span className="opacity-80 text-sm">Est. Tax Owed ({res.avgtax.toFixed(2)}%)</span>
-                    <div className="text-2xl font-bold">{symbol}{res.taxOwed.toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
+                
+                <div className="flex gap-3 w-full md:w-auto relative">
+                    <div className="px-5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl flex items-center justify-center">
+                        <span className="text-sm font-bold text-gray-500">Assets: {assets.length}/5</span>
+                    </div>
+                    <div className="relative flex-1 min-w-[160px]">
+                        <button 
+                            onClick={() => setAddMenuOpen(!addMenuOpen)} 
+                            disabled={assets.length >= 5}
+                            className="w-full justify-center bg-brand hover:bg-brand2 text-white px-5 py-2.5 rounded-xl font-medium transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <Plus className="w-4 h-4" /> Add Asset
+                        </button>
+
+                        {addMenuOpen && (
+                            <>
+                                <div className="fixed inset-0 z-10" onClick={() => setAddMenuOpen(false)} />
+                                <div className="absolute right-0 mt-2 w-72 bg-white border border-gray-200 rounded-xl shadow-xl z-20 overflow-hidden animate-in zoom-in-95 duration-100 origin-top-right">
+                                    <button onClick={addBlankRow} className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 border-b border-gray-100">
+                                        <div className="bg-gray-100 p-1.5 rounded-lg text-gray-500"><Plus className="w-4 h-4" /></div>
+                                        <div>
+                                            <p className="text-sm font-bold text-gray-800">Blank Asset</p>
+                                            <p className="text-[10px] text-gray-400 uppercase tracking-tight">Manual Entry</p>
+                                        </div>
+                                    </button>
+                                    <div className="max-h-64 overflow-y-auto">
+                                        <div className="px-4 py-2 text-[10px] font-bold text-gray-400 uppercase bg-gray-50/50 sticky top-0 backdrop-blur-sm">Quick Add ({currency})</div>
+                                        {Object.values(pricesData[currency] || {}).map((asset) => (
+                                            <button 
+                                                key={asset.isin} 
+                                                onClick={() => addExistingAsset(asset)}
+                                                className="w-full text-left px-4 py-2.5 hover:bg-brand6/10 transition-colors group flex flex-col"
+                                            >
+                                                <span className="text-xs font-bold text-gray-700 group-hover:text-brand truncate">{asset.name}</span>
+                                                <span className="flex justify-between w-full mt-1">
+                                                    <span className="text-[10px] text-gray-400 font-mono">{asset.isin}</span>
+                                                    <span className="text-[10px] text-brand3 font-mono">{symbol}{asset.price.toFixed(2)}</span>
+                                                </span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </>
+                        )}
+                    </div>
                 </div>
             </div>
 
-            {/* Asset Table */}
-            <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
-                <table className="w-full text-left">
-                    <thead className="bg-gray-50 text-xs uppercase font-bold text-gray-600 border-b">
-                        <tr>
-                            <th className="p-4">Asset Name</th>
-                            <th className="p-4">Units</th>
-                            <th className="p-4">Buy Price</th>
-                            <th className="p-4">Sell Price (Raw)</th>
-                            <th className="p-4 text-right">Gain (Buffered)</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y">
-                        {res.breakdown.map((asset) => (
-                            <tr key={asset.id} className="hover:bg-gray-50 transition-colors">
-                                <td className="p-4 font-medium">{asset.name}</td>
-                                <td className="p-4">
-                                    <input type="number" value={asset.units} onChange={(e) => updateAsset(asset.id, 'units', e.target.value)} className="w-20 p-1 border rounded" />
-                                </td>
-                                <td className="p-4">
-                                    <input type="number" value={asset.ogPrice} onChange={(e) => updateAsset(asset.id, 'ogPrice', e.target.value)} className="w-20 p-1 border rounded" />
-                                </td>
-                                <td className="p-4">
-                                    <input type="number" value={asset.currentPrice} onChange={(e) => updateAsset(asset.id, 'currentPrice', e.target.value)} className="w-20 p-1 border rounded" />
-                                </td>
-                                <td className={`p-4 text-right font-bold ${asset.totalGain >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                    {symbol}{asset.totalGain.toLocaleString(undefined, {maximumFractionDigits: 0})}
-                                </td>
+            {/* Main Table Workspace */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse min-w-[900px]">
+                        <thead>
+                            <tr className="bg-gray-50 border-b border-gray-200 text-gray-500 text-[10px] font-bold uppercase tracking-wider">
+                                <th className="px-6 py-4">Asset / ISIN</th>
+                                <th className="px-4 py-4 w-32">Units</th>
+                                <th className="px-4 py-4 w-32">Buy Price ({symbol})</th>
+                                <th className="px-4 py-4 w-32">Current ({symbol})</th>
+                                <th className="px-6 py-4 text-right">Estimated Gain</th>
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            {results.breakdown.length === 0 ? (
+                                <tr>
+                                    <td colSpan={5} className="px-6 py-12 text-center text-gray-400 italic">
+                                        Portfolio is empty. Add an asset to estimate CGT.
+                                    </td>
+                                </tr>
+                            ) : (
+                                results.breakdown.map((asset) => (
+                                    <tr key={asset.id} className="border-b border-gray-100 hover:bg-gray-50/50 transition-colors">
+                                        <td className="px-6 py-4">
+                                            <div className="flex flex-col gap-1">
+                                                <input 
+                                                    type="text" 
+                                                    value={asset.name} 
+                                                    onChange={(e) => handleUpdateAsset(asset.id, 'name', e.target.value)} 
+                                                    className="bg-transparent font-bold text-gray-800 outline-none w-full" 
+                                                    placeholder="Asset Name"
+                                                />
+                                                <div className="flex items-center gap-2">
+                                                    <button onClick={() => removeRow(asset.id)} className="text-gray-300 hover:text-brand3 transition-colors">
+                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                    </button>
+                                                    <input 
+                                                        type="text" 
+                                                        value={asset.isin} 
+                                                        onChange={(e) => handleUpdateAsset(asset.id, 'isin', e.target.value)} 
+                                                        className="bg-transparent text-[10px] text-gray-400 uppercase tracking-widest outline-none w-full" 
+                                                        placeholder="ISIN/TICKER"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="px-4 py-4">
+                                            <input 
+                                                type="number" 
+                                                step="0.0001" 
+                                                value={asset.units} 
+                                                onChange={(e) => handleUpdateAsset(asset.id, 'units', e.target.value)} 
+                                                className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-mono shadow-sm focus:border-brand/30 outline-none" 
+                                            />
+                                        </td>
+                                        <td className="px-4 py-4">
+                                            <input 
+                                                type="number" 
+                                                step="0.01" 
+                                                value={asset.ogPrice} 
+                                                onChange={(e) => handleUpdateAsset(asset.id, 'ogPrice', e.target.value)} 
+                                                className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-mono shadow-sm focus:border-brand/30 outline-none" 
+                                            />
+                                        </td>
+                                        <td className="px-4 py-4">
+                                            <input 
+                                                type="number" 
+                                                step="0.01" 
+                                                value={asset.currentPrice} 
+                                                onChange={(e) => handleUpdateAsset(asset.id, 'currentPrice', e.target.value)} 
+                                                className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-mono shadow-sm focus:border-brand/30 outline-none" 
+                                            />
+                                        </td>
+                                        <td className="px-6 py-4 text-right">
+                                            <span className={`block font-bold text-lg ${asset.totalGain >= 0 ? 'text-emerald-600' : 'text-brand3'}`}>
+                                                {formatCurrency(asset.totalGain)}
+                                            </span>
+                                            <span className="text-[10px] text-gray-400">Net Return</span>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     );
