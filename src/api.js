@@ -29,6 +29,7 @@ export const fetchPortfolioData = (onComplete) => {
 
                 // Map Historical Strings for Analytics[cite: 1, 2]
                 historyMap[row.ISIN] = {
+                    Daily_1Y: row['Daily_1Y'],
                     Monthly_5Y: row['Monthly_5Y'],
                     Weekly_3Y: row['Weekly_3Y']
                 };

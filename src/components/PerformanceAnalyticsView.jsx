@@ -15,18 +15,19 @@ const COLORS = ['#f43f5e', '#3b82f6', '#f59e0b', '#10b981']; // Rose, Blue, Ambe
 
 export default function PerformanceAnalyticsView({ presets, historicalData, pricesData = {}, symbol = "$" }) {
   
-  // Calculate dynamic YTD weeks
-  const getYTDWeeks = () => {
+// Calculate dynamic YTD trading days (roughly 252 trading days per 365 calendar days)
+  const getYTDDays = () => {
       const now = new Date();
       const start = new Date(now.getFullYear(), 0, 1);
-      return Math.max(1, Math.floor((now - start) / (7 * 24 * 60 * 60 * 1000)));
+      const calendarDays = Math.max(1, Math.floor((now - start) / (24 * 60 * 60 * 1000)));
+      return Math.floor(calendarDays * (252 / 365)); 
   };
 
   const TIMEFRAMES = {
-    '3m':  { label: '3M',  source: 'Weekly_3Y',  points: 13 },
-    '6m':  { label: '6M',  source: 'Weekly_3Y',  points: 26 },
-    'ytd': { label: 'YTD', source: 'Weekly_3Y',  points: getYTDWeeks() },
-    '1y':  { label: '1Y',  source: 'Weekly_3Y',  points: 52 },
+    '3m':  { label: '3M',  source: 'Daily_1Y',   points: 63 },  // ~63 trading days
+    '6m':  { label: '6M',  source: 'Daily_1Y',   points: 126 }, // ~126 trading days
+    'ytd': { label: 'YTD', source: 'Daily_1Y',   points: getYTDDays() },
+    '1y':  { label: '1Y',  source: 'Daily_1Y',   points: 252 }, // ~252 trading days
     '3y':  { label: '3Y',  source: 'Weekly_3Y',  points: 156 },
     '5y':  { label: '5Y',  source: 'Monthly_5Y', points: 60 }
   };
@@ -138,15 +139,25 @@ export default function PerformanceAnalyticsView({ presets, historicalData, pric
     const labels = [];
     const now = new Date();
     const isWeekly = config.source.includes('Weekly');
+    const isDaily = config.source.includes('Daily');
     
     for (let i = 0; i < config.points; i++) {
         const d = new Date(now);
-        if (isWeekly) {
+        if (isDaily) {
+            // Multiply by (365/252) to map trading days accurately back across the calendar
+            d.setDate(d.getDate() - Math.floor((config.points - 1 - i) * (365/252)));
+        } else if (isWeekly) {
             d.setDate(d.getDate() - (config.points - 1 - i) * 7);
         } else {
             d.setMonth(d.getMonth() - (config.points - 1 - i));
         }
-        labels.push(d.toLocaleString('default', { month: 'short', year: '2-digit' }));
+        
+        // Show "Day Month" for shorter timeframes, and "Month Year" for longer ones
+        if (isDaily && config.points <= 126) {
+            labels.push(d.toLocaleString('default', { month: 'short', day: 'numeric' }));
+        } else {
+            labels.push(d.toLocaleString('default', { month: 'short', year: '2-digit' }));
+        }
     }
 
     const data = [];
@@ -423,7 +434,14 @@ export default function PerformanceAnalyticsView({ presets, historicalData, pric
                     tickLine={false}
                     tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }}
                     dy={15}
-                    interval={timeframe === '5y' ? 11 : timeframe === '3y' ? 25 : timeframe === '1y' ? 8 : timeframe === '6m' ? 4 : timeframe === '3m' ? 2 : Math.max(1, Math.floor(TIMEFRAMES.ytd.points / 5))}
+                    interval={
+                        timeframe === '5y' ? 11 : 
+                        timeframe === '3y' ? 25 : 
+                        timeframe === '1y' ? 21 : // roughly 1 tick per month (21 trading days)
+                        timeframe === '6m' ? 10 : // roughly 1 tick every 2 weeks
+                        timeframe === '3m' ? 5  : // roughly 1 tick per week
+                        Math.max(1, Math.floor(TIMEFRAMES.ytd.points / 10))
+                    }
                   />
                   <YAxis 
                     axisLine={false}
