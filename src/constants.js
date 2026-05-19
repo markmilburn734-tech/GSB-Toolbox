@@ -527,7 +527,7 @@ export const INITIAL_PRESETS = {
         { name: "iShares S&P 500 ETF", isin: "AU00000IVV8", target: 11.00 },
         { name: "iShares Europe ETF", isin: "AU0000IEU6", target: 2.50 },
         { name: "Vanguard MSCI International Small Companies Index ETF", isin: "AU0000026171", target: 2.00 },
-        { name: "Vanguard Global Value Active Equity ETF", isin: "AU000005886", target: 2.00 },
+        { name: "Vanguard Global Value Active Equity ETF", isin: "au0000005886", target: 2.00 },
         { name: "iShares MSCI Emerging Markets ETF", isin: "AU00000IEM3", target: 1.50 },
         { name: "iShares MSCI Japan ETF", isin: "AU00000IJP5", target: 0.50 },
         { name: "Cash", isin: "N/A", target: 1.00 }
@@ -538,7 +538,7 @@ export const INITIAL_PRESETS = {
         { name: "iShares S&P 500 ETF", isin: "AU00000IVV8", target: 17.00 },
         { name: "iShares Europe ETF", isin: "AU0000IEU6", target: 4.00 },
         { name: "Vanguard MSCI International Small Companies Index ETF", isin: "AU0000026171", target: 3.00 },
-        { name: "Vanguard Global Value Active Equity ETF", isin: "AU000005886", target: 3.00 },
+        { name: "Vanguard Global Value Active Equity ETF", isin: "au0000005886", target: 3.00 },
         { name: "iShares MSCI Emerging Markets ETF", isin: "AU00000IEM3", target: 2.00 },
         { name: "iShares MSCI Japan ETF", isin: "AU00000IJP5", target: 1.00 },
         { name: "Cash", isin: "N/A", target: 1.00 }
@@ -549,7 +549,7 @@ export const INITIAL_PRESETS = {
         { name: "iShares S&P 500 ETF", isin: "AU00000IVV8", target: 22.50 },
         { name: "iShares Europe ETF", isin: "AU0000IEU6", target: 5.00 },
         { name: "Vanguard MSCI International Small Companies Index ETF", isin: "AU0000026171", target: 4.00 },
-        { name: "Vanguard Global Value Active Equity ETF", isin: "AU000005886", target: 4.00 },
+        { name: "Vanguard Global Value Active Equity ETF", isin: "au0000005886", target: 4.00 },
         { name: "iShares MSCI Emerging Markets ETF", isin: "AU00000IEM3", target: 3.00 },
         { name: "iShares MSCI Japan ETF", isin: "AU00000IJP5", target: 1.00 },
         { name: "Cash", isin: "N/A", target: 1.00 }
@@ -560,7 +560,7 @@ export const INITIAL_PRESETS = {
         { name: "iShares S&P 500 ETF", isin: "AU00000IVV8", target: 28.50 },
         { name: "iShares Europe ETF", isin: "AU0000IEU6", target: 6.00 },
         { name: "Vanguard MSCI International Small Companies Index ETF", isin: "AU0000026171", target: 5.00 },
-        { name: "Vanguard Global Value Active Equity ETF", isin: "AU000005886", target: 5.00 },
+        { name: "Vanguard Global Value Active Equity ETF", isin: "au0000005886", target: 5.00 },
         { name: "iShares MSCI Emerging Markets ETF", isin: "AU00000IEM3", target: 3.50 },
         { name: "iShares MSCI Japan ETF", isin: "AU00000IJP5", target: 1.50 },
         { name: "Cash", isin: "N/A", target: 1.00 }
@@ -571,7 +571,7 @@ export const INITIAL_PRESETS = {
         { name: "iShares S&P 500 ETF", isin: "AU00000IVV8", target: 34.50 },
         { name: "iShares Europe ETF", isin: "AU0000IEU6", target: 7.00 },
         { name: "Vanguard MSCI International Small Companies Index ETF", isin: "AU0000026171", target: 6.00 },
-        { name: "Vanguard Global Value Active Equity ETF", isin: "AU000005886", target: 6.00 },
+        { name: "Vanguard Global Value Active Equity ETF", isin: "au0000005886", target: 6.00 },
         { name: "iShares MSCI Emerging Markets ETF", isin: "AU00000IEM3", target: 4.00 },
         { name: "iShares MSCI Japan ETF", isin: "AU00000IJP5", target: 2.00 },
         { name: "Cash", isin: "N/A", target: 1.00 }
@@ -582,7 +582,7 @@ export const INITIAL_PRESETS = {
         { name: "iShares S&P 500 ETF", isin: "AU00000IVV8", target: 40.00 },
         { name: "iShares Europe ETF", isin: "AU0000IEU6", target: 8.00 },
         { name: "Vanguard MSCI International Small Companies Index ETF", isin: "AU0000026171", target: 7.00 },
-        { name: "Vanguard Global Value Active Equity ETF", isin: "AU000005886", target: 7.00 },
+        { name: "Vanguard Global Value Active Equity ETF", isin: "au0000005886", target: 7.00 },
         { name: "iShares MSCI Emerging Markets ETF", isin: "AU00000IEM3", target: 5.00 },
         { name: "iShares MSCI Japan ETF", isin: "AU00000IJP5", target: 2.50 },
         { name: "Cash", isin: "N/A", target: 1.00 }
@@ -593,7 +593,7 @@ export const INITIAL_PRESETS = {
         { name: "iShares S&P 500 ETF", isin: "AU00000IVV8", target: 45.50 },
         { name: "iShares Europe ETF", isin: "AU0000IEU6", target: 9.00 },
         { name: "Vanguard MSCI International Small Companies Index ETF", isin: "AU0000026171", target: 8.00 },
-        { name: "Vanguard Global Value Active Equity ETF", isin: "AU000005886", target: 8.00 },
+        { name: "Vanguard Global Value Active Equity ETF", isin: "au0000005886", target: 8.00 },
         { name: "iShares MSCI Emerging Markets ETF", isin: "AU00000IEM3", target: 6.00 },
         { name: "iShares MSCI Japan ETF", isin: "AU00000IJP5", target: 3.00 },
         { name: "Cash", isin: "N/A", target: 1.00 }
@@ -604,7 +604,7 @@ export const INITIAL_PRESETS = {
         { name: "iShares S&P 500 ETF", isin: "AU00000IVV8", target: 50.75 },
         { name: "iShares Europe ETF", isin: "AU0000IEU6", target: 10.00 },
         { name: "Vanguard MSCI International Small Companies Index ETF", isin: "AU0000026171", target: 9.00 },
-        { name: "Vanguard Global Value Active Equity ETF", isin: "AU000005886", target: 9.00 },
+        { name: "Vanguard Global Value Active Equity ETF", isin: "au0000005886", target: 9.00 },
         { name: "iShares MSCI Emerging Markets ETF", isin: "AU00000IEM3", target: 7.00 },
         { name: "iShares MSCI Japan ETF", isin: "AU00000IJP5", target: 3.50 },
         { name: "Cash", isin: "N/A", target: 1.00 }
@@ -613,7 +613,7 @@ export const INITIAL_PRESETS = {
         { name: "iShares S&P 500 ETF", isin: "AU00000IVV8", target: 56.00 },
         { name: "iShares Europe ETF", isin: "AU0000IEU6", target: 11.00 },
         { name: "Vanguard MSCI International Small Companies Index ETF", isin: "AU0000026171", target: 10.00 },
-        { name: "Vanguard Global Value Active Equity ETF", isin: "AU000005886", target: 10.00 },
+        { name: "Vanguard Global Value Active Equity ETF", isin: "au0000005886", target: 10.00 },
         { name: "iShares MSCI Emerging Markets ETF", isin: "AU00000IEM3", target: 8.00 },
         { name: "iShares MSCI Japan ETF", isin: "AU00000IJP5", target: 4.00 },
         { name: "Cash", isin: "N/A", target: 1.00 }
@@ -1198,7 +1198,7 @@ export const BAKED_PRICES = {
         "VVLU.AX": {
             "date": "2026-04-30",
             "high_52": 83.9,
-            "isin": "AU000005886",
+            "isin": "au0000005886",
             "low_52": 68.4,
             "name": "Vanguard Global Value Active Equity ETF",
             "pct_off_high": 6.79,
