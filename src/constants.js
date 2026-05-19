@@ -1977,4 +1977,4 @@ export const CURRENCY_SYMBOLS = {
 };
 
 // 5. Data Sources
-export const GOOGLE_SHEETS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT2K_7b79oThGmtNyB6y1Flz_o6_I9k5BMq2nIc-ARgZ7qi0FpTjaaycaDv4pNX7BtkmexcvaicQE1M/pub?gid=0&single=true&output=csv";
+export const GOOGLE_SHEETS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT2K_7b79oThGmtNyB6y1Flz_o6_I9k5BMq2nIc-ARgZ7qi0FpTjaaycaDv4pNX7BtkmexcvaicQE1M/pub?output=csv";
